@@ -79,7 +79,7 @@ final class AppModel {
         didSet { UserDefaults.standard.set(translationEnabled, forKey: "translationEnabled") }
     }
     /// Whether an API key for the AI provider is saved; the key itself never leaves the keychain helper.
-    private(set) var hasAPIKey = Keychain.read(LLMProvider.deepSeek.keychainAccount) != nil
+    private(set) var hasAPIKey = false
     /// Final segments whose Chinese is on its way.
     private(set) var translating: Set<UUID> = []
     var questionsEnabled = UserDefaults.standard.object(forKey: "questionsEnabled") as? Bool ?? true {
@@ -91,7 +91,12 @@ final class AppModel {
     var questions: [ClassQuestion] = []
     /// Set when a new question arrives, so the Q&A tab can show it.
     var unseenQuestions = 0
-    let provider = LLMProvider.deepSeek
+    var provider: LLMProvider {
+        didSet {
+            UserDefaults.standard.set(provider.id, forKey: "llmProvider")
+            hasAPIKey = Keychain.read(provider.keychainAccount) != nil
+        }
+    }
 
     @ObservationIgnored private var engine: Qwen3ASREngine?
     @ObservationIgnored private var engineLoad: Task<Qwen3ASREngine, Error>?
@@ -131,6 +136,11 @@ final class AppModel {
     @ObservationIgnored private var answerFirstPieceLatencies: [Double] = []
     @ObservationIgnored private var answerTotalLatencies: [Double] = []
     @ObservationIgnored private let logger = Logger(subsystem: "com.chenshaojie.ClassLens", category: "AppModel")
+
+    init() {
+        provider = UserDefaults.standard.string(forKey: "llmProvider").flatMap(LLMProvider.named) ?? .deepSeek
+        hasAPIKey = Keychain.read(provider.keychainAccount) != nil
+    }
 
     var isListening: Bool {
         if case .listening = activity { true } else { false }
@@ -339,7 +349,7 @@ final class AppModel {
     private func makeTranslator() -> SegmentTranslator? {
         guard translationEnabled, !asrOnly else { return nil }
         do {
-            return SegmentTranslator(client: try OpenAICompatibleClient.load(provider), model: provider.fastModel)
+            return SegmentTranslator(client: try provider.loadClient(), model: provider.fastModel)
         } catch {
             errorMessage = error.localizedDescription
             return nil
@@ -347,7 +357,7 @@ final class AppModel {
     }
 
     private func makeDetector() -> QuestionDetector? {
-        guard questionsEnabled, !asrOnly, let client = try? OpenAICompatibleClient.load(provider) else { return nil }
+        guard questionsEnabled, !asrOnly, let client = try? provider.loadClient() else { return nil }
         return QuestionDetector(client: client, model: provider.fastModel)
     }
 
@@ -383,7 +393,7 @@ final class AppModel {
             return Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
         }
         do {
-            let answerer = QuestionAnswerer(client: try OpenAICompatibleClient.load(provider), model: provider.strongModel)
+            let answerer = QuestionAnswerer(client: try provider.loadClient(), model: provider.strongModel)
             var first = true
             let glossaryLines = glossary?.translationLines ?? []
             let stream: AsyncThrowingStream<String, Error>
@@ -468,18 +478,18 @@ final class AppModel {
     func saveAPIKey(_ key: String) throws {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         try Keychain.save(trimmed, for: provider.keychainAccount)
-        hasAPIKey = !trimmed.isEmpty
+        hasAPIKey = Keychain.read(provider.keychainAccount) != nil
     }
 
     func deleteAPIKey() throws {
         try Keychain.delete(provider.keychainAccount)
-        hasAPIKey = false
+        hasAPIKey = Keychain.read(provider.keychainAccount) != nil
     }
 
     /// Translates one sentence with the saved key, to check the key and the connection.
     func testTranslation() async -> Result<String, Error> {
         do {
-            let translator = SegmentTranslator(client: try OpenAICompatibleClient.load(provider), model: provider.fastModel)
+            let translator = SegmentTranslator(client: try provider.loadClient(), model: provider.fastModel)
             let sample = TranscriptSegment(start: 0, end: 3, text: "The null hypothesis says the two methods have the same expected accuracy.", isFinal: true)
             let outcome = await translator.translate(sample)
             if let error = outcome.error { throw TestFailure(message: error) }
@@ -544,7 +554,7 @@ final class AppModel {
     /// Feeds a saved transcript to question spotting, so prompt changes can be compared without re-running recognition.
     private func evalQuestions(_ url: URL) async {
         do {
-            let detector = QuestionDetector(client: try OpenAICompatibleClient.load(provider), model: provider.fastModel)
+            let detector = QuestionDetector(client: try provider.loadClient(), model: provider.fastModel)
             let collector = Task {
                 var found: [QuestionDetector.Found] = []
                 for await item in detector.found { found.append(item) }
@@ -587,7 +597,7 @@ final class AppModel {
             var tracker = SlideTracker(pageTexts: pageTexts, configuration: configuration)
             print("slides \(tracker.slideCount): " + tracker.slides.map { $0.count == 1 ? "\($0.lowerBound + 1)" : "\($0.lowerBound + 1)-\($0.upperBound + 1)" }.joined(separator: " "))
             let mode = ProcessInfo.processInfo.environment["CLASSLENS_SLIDES_MODE"] ?? "words"
-            let locator = mode == "words" ? nil : SlideLocator(client: try OpenAICompatibleClient.load(provider), model: provider.fastModel, slideTexts: SlideTracker.slideTexts(pageTexts: pageTexts))
+            let locator = mode == "words" ? nil : SlideLocator(client: try provider.loadClient(), model: provider.fastModel, slideTexts: SlideTracker.slideTexts(pageTexts: pageTexts))
             var seen: [TranscriptSegment] = []
             var lastAsked: TimeInterval = -.infinity
             var answer: SlideLocator.Answer?

@@ -29,7 +29,7 @@ extension AppModel {
         let slidesFile = source.flatMap { $0.pathExtension.lowercased() == "pdf" ? $0.lastPathComponent : nil }
         let pages: [String] = document.map { document in (0..<document.pageCount).map(document.pageText) } ?? []
         let pageText: @Sendable (Int) -> String? = { page in pages.indices.contains(page - 1) ? pages[page - 1] : nil }
-        let summarizer = plan.includeSummary ? (try? OpenAICompatibleClient.load(provider)).map { LectureSummarizer(client: $0, model: provider.strongModel) } : nil
+        let summarizer = plan.includeSummary ? (try? provider.loadClient()).map { LectureSummarizer(client: $0, model: provider.strongModel) } : nil
         do {
             let result = try await ObsidianExporter.export(session, plan: plan, slidesFile: slidesFile, pageText: pageText, summarizer: summarizer) { [weak self] step in
                 self?.exportState = .running(step)

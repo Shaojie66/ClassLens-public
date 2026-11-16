@@ -99,7 +99,7 @@ extension AppModel {
             await use(cached)
             return
         }
-        guard let client = try? OpenAICompatibleClient.load(provider) else {
+        guard let client = try? provider.loadClient() else {
             glossaryState = .failed("填写 API key 后才能从课件抽取术语表")
             return
         }
@@ -132,7 +132,7 @@ extension AppModel {
     // MARK: Following the teacher
 
     private func makeSlideLocator(pageTexts: [String]) -> SlideLocator? {
-        guard slideLocatorEnabled, !asrOnly, let client = try? OpenAICompatibleClient.load(provider) else { return nil }
+        guard slideLocatorEnabled, !asrOnly, let client = try? provider.loadClient() else { return nil }
         return SlideLocator(client: client, model: provider.fastModel, slideTexts: SlideTracker.slideTexts(pageTexts: pageTexts))
     }
 

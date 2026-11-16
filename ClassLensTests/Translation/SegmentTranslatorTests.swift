@@ -57,17 +57,25 @@ struct SegmentTranslatorTests {
     }
 
     @Test func retriesOnceOnRateLimit() async {
-        let llm = FakeLLM(failures: [OpenAICompatibleClient.Failure.rateLimited])
+        let llm = FakeLLM(failures: [LLMFailure.rateLimited])
         let outcome = await SegmentTranslator(client: llm, model: "m").translate(segment("hello"))
         #expect(outcome.translation == "译：hello")
         #expect(llm.requests.withLock { $0.count } == 2)
     }
 
     @Test func doesNotRetryABadKey() async {
-        let llm = FakeLLM(failures: [OpenAICompatibleClient.Failure.invalidKey])
+        let llm = FakeLLM(failures: [LLMFailure.invalidKey])
         let outcome = await SegmentTranslator(client: llm, model: "m").translate(segment("hello"))
         #expect(outcome.translation == nil)
         #expect(outcome.error != nil)
+        #expect(llm.requests.withLock { $0.count } == 1)
+    }
+
+    @Test func doesNotRetryARefusal() async {
+        let llm = FakeLLM(failures: [LLMFailure.refused])
+        let outcome = await SegmentTranslator(client: llm, model: "m").translate(segment("hello"))
+        #expect(outcome.translation == nil)
+        #expect(outcome.error == LLMFailure.refused.localizedDescription)
         #expect(llm.requests.withLock { $0.count } == 1)
     }
 

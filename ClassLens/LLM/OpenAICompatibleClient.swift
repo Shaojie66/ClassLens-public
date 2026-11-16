@@ -2,36 +2,10 @@ import Foundation
 
 /// `POST {baseURL}/chat/completions` in the OpenAI format, which DeepSeek and most providers accept.
 struct OpenAICompatibleClient: LLMClient {
-    enum Failure: LocalizedError, Equatable {
-        case missingKey(String)
-        case invalidKey
-        case insufficientBalance
-        case rateLimited
-        case server(Int, String)
-        case emptyReply
-
-        var errorDescription: String? {
-            switch self {
-            case .missingKey(let provider): "还没有填写 \(provider) 的 API key，请到“设置”里填写。"
-            case .invalidKey: "API key 无效，请到“设置”里检查。"
-            case .insufficientBalance: "API 账户余额不足。"
-            case .rateLimited: "请求太频繁，被限流了，稍后会自动重试。"
-            case .server(let code, let message): "AI 服务返回错误 \(code)：\(message)"
-            case .emptyReply: "AI 服务返回了空内容。"
-            }
-        }
-    }
-
     let provider: LLMProvider
     let apiKey: String
     var session: URLSession = .shared
     var timeout: TimeInterval = 20
-
-    /// Reads the key from the keychain; throws `missingKey` if none is saved.
-    static func load(_ provider: LLMProvider) throws -> OpenAICompatibleClient {
-        guard let key = Keychain.read(provider.keychainAccount) else { throw Failure.missingKey(provider.name) }
-        return OpenAICompatibleClient(provider: provider, apiKey: key)
-    }
 
     func complete(_ request: ChatRequest) async throws -> String {
         let (data, response) = try await session.data(for: urlRequest(for: request, stream: false))
@@ -39,7 +13,7 @@ struct OpenAICompatibleClient: LLMClient {
         guard status == 200 else { throw Self.failure(status: status, data: data) }
         let reply = try JSONDecoder().decode(Reply.self, from: data)
         guard let content = reply.choices.first?.message.content?.trimmingCharacters(in: .whitespacesAndNewlines), !content.isEmpty else {
-            throw Failure.emptyReply
+            throw LLMFailure.emptyReply
         }
         return content
     }
@@ -92,15 +66,27 @@ struct OpenAICompatibleClient: LLMClient {
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        urlRequest.httpBody = try Self.body(for: request, extra: provider.extraBody, stream: stream)
+        urlRequest.httpBody = try Self.body(for: request, extra: provider.extraBody, reasoningEffort: provider.reasoningEffort, stream: stream)
         return urlRequest
     }
 
-    static func body(for request: ChatRequest, extra: [String: JSONValue], stream: Bool = false) throws -> Data {
+    static func body(
+        for request: ChatRequest,
+        extra: [String: JSONValue],
+        reasoningEffort: [String: String] = [:],
+        stream: Bool = false
+    ) throws -> Data {
         var fields: [String: JSONValue] = extra
         fields["model"] = .string(request.model)
-        fields["temperature"] = .number(request.temperature)
-        fields["max_tokens"] = .number(Double(request.maxTokens))
+        if let effort = reasoningEffort[request.model] {
+            // OpenAI reasoning models reject `max_tokens`; their cap also covers the hidden reasoning.
+            fields["reasoning_effort"] = .string(effort)
+            let headroom = effort == "none" ? 0 : 4096
+            fields["max_completion_tokens"] = .number(Double(request.maxTokens + headroom))
+        } else {
+            fields["temperature"] = .number(request.temperature)
+            fields["max_tokens"] = .number(Double(request.maxTokens))
+        }
         fields["stream"] = .bool(stream)
         if request.jsonOutput {
             fields["response_format"] = .object(["type": .string("json_object")])
@@ -112,15 +98,15 @@ struct OpenAICompatibleClient: LLMClient {
         return try JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
     }
 
-    static func failure(status: Int, data: Data) -> Failure {
+    static func failure(status: Int, data: Data) -> LLMFailure {
+        let error = (try? JSONDecoder().decode(ErrorReply.self, from: data))?.error
         switch status {
         case 401: return .invalidKey
         case 402: return .insufficientBalance
-        case 429: return .rateLimited
+        // OpenAI answers an exhausted quota with 429 too; retrying would not help.
+        case 429: return error?.code == "insufficient_quota" ? .insufficientBalance : .rateLimited
         default:
-            let message = (try? JSONDecoder().decode(ErrorReply.self, from: data))?.error.message
-                ?? String(data: data.prefix(200), encoding: .utf8) ?? ""
-            return .server(status, message)
+            return .server(status, error?.message ?? String(data: data.prefix(200), encoding: .utf8) ?? "")
         }
     }
 
@@ -141,7 +127,10 @@ struct OpenAICompatibleClient: LLMClient {
     }
 
     private struct ErrorReply: Decodable {
-        struct Detail: Decodable { var message: String }
+        struct Detail: Decodable {
+            var message: String
+            var code: String?
+        }
         var error: Detail
     }
 }

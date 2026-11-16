@@ -63,10 +63,10 @@ actor SegmentTranslator {
     private func completeWithRetry(_ request: ChatRequest) async throws -> String {
         do {
             return try await client.complete(request)
-        } catch let failure as OpenAICompatibleClient.Failure {
+        } catch let failure as LLMFailure {
             switch failure {
             case .rateLimited, .server, .emptyReply: break
-            case .missingKey, .invalidKey, .insufficientBalance: throw failure
+            case .missingKey, .invalidKey, .insufficientBalance, .refused: throw failure
             }
         } catch is URLError {
         }

@@ -7,7 +7,7 @@ A macOS lecture companion for English-taught classes. ClassLens transcribes audi
 
 **macOS 26+** · **Apple silicon** · **Swift 6** · **SwiftUI**
 
-- **Listen with captions:** Qwen3-ASR produces English transcripts on the Mac; DeepSeek translates finalized segments into Chinese. A floating subtitle window is available.
+- **Listen with captions:** Qwen3-ASR produces English transcripts on the Mac; the AI provider you pick (DeepSeek, Claude or OpenAI) translates finalized segments into Chinese. A floating subtitle window is available.
 - **Follow class questions:** the app looks for questions directed at the class and generates suggested answers. Question spotting pauses when a break is detected and can be resumed manually.
 - **Keep slides in context:** open a PDF or PPT, follow the lecturer's current page, and select slide or caption text to explain, translate or ask about it.
 - **Review later:** replay the recording alongside captions and questions, then export the transcript, audio and AI summary to Obsidian.
@@ -23,7 +23,7 @@ A macOS lecture companion for English-taught classes. ClassLens transcribes audi
    make run
    ```
 
-3. Enter and save your own DeepSeek API key in the app's settings. On first use, speech recognition downloads `mlx-community/Qwen3-ASR-1.7B-8bit` from Hugging Face and needs a network connection. Grant microphone access when macOS asks.
+3. In the app's settings, pick an AI provider (DeepSeek, Claude or OpenAI; DeepSeek by default) and enter and save your own API key. Each provider's key is stored separately. On first use, speech recognition downloads `mlx-community/Qwen3-ASR-1.7B-8bit` from Hugging Face and needs a network connection. Grant microphone access when macOS asks.
 4. Open a PDF or PPT before class, then start recording. PowerPoint converts PPT files to PDF; Keynote is the fallback if PowerPoint is unavailable. Install one of them and grant automation permission when prompted, or open a PDF directly.
 5. After class, open the lecture in the history sidebar to review it. For export, choose an Obsidian destination and inspect the files to be created.
 
@@ -48,7 +48,7 @@ make test
 
 ## Data and privacy
 
-Audio is recorded and recognized on the Mac and **is not uploaded as audio**. Recordings, transcripts and lecture records are stored locally. When using translation, glossary extraction, question spotting, answering, AI slide following or summarization, relevant transcript text, slide text, questions and other context are sent to DeepSeek. Calls use your own API key and account and incur API charges. The app saves the key in the macOS Keychain.
+Audio is recorded and recognized on the Mac and **is not uploaded as audio**. Recordings, transcripts and lecture records are stored locally. When using translation, glossary extraction, question spotting, answering, AI slide following or summarization, relevant transcript text, slide text, questions and other context are sent to the AI provider selected in settings (DeepSeek, Anthropic or OpenAI). Calls use your own API key and account and incur API charges. The app saves the key in the macOS Keychain.
 
 Session data is stored under `~/Library/Application Support/ClassLens/sessions/<session-id>/`. Export follows the author's own Obsidian vault convention, using the relative structure `模块/<课程>/资料/课堂记录/ClassLens/{转写,录音,AI总结}/`. It creates new files only and does not overwrite existing files; a different name is planned for a collision, and the write fails if the target already exists.
 
@@ -76,11 +76,11 @@ flowchart LR
     H --> L
 ```
 
-`SegmentTranslator`, `QuestionDetector`, `SlideLocator` and glossary extraction use `deepseek-flash`; `QuestionAnswerer` and the post-lecture summary use `deepseek-v4-pro`. `SlideTracker` provides the local text-matching fallback. `SessionStore` saves audio, captions and other session data; export can generate a summary.
+`SegmentTranslator`, `QuestionDetector`, `SlideLocator` and glossary extraction use the selected provider's fast model (`deepseek-flash`, `claude-haiku-5-5` or `gpt-6-luna`); `QuestionAnswerer` and the post-lecture summary use its stronger model (`deepseek-v4-pro`, `claude-opus-5-5` or `gpt-6.1-sol`). The acceptance checks and evaluations have so far only been run with DeepSeek. `SlideTracker` provides the local text-matching fallback. `SessionStore` saves audio, captions and other session data; export can generate a summary.
 
 ## Verification and evaluation
 
-Run these from the repository root after `make release`. Set the example environment variables to your own recording and slide paths. Replay may create local session records; translation, question spotting and model-based slide following make real, billable DeepSeek calls. Add `--asr-only` to test recognition alone.
+Run these from the repository root after `make release`. Set the example environment variables to your own recording and slide paths. Replay may create local session records; translation, question spotting and model-based slide following make real, billable calls to the selected AI provider. Add `--asr-only` to test recognition alone.
 
 ```bash
 APP=build/Build/Products/Release/ClassLens.app/Contents/MacOS/ClassLens

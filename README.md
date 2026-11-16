@@ -7,7 +7,7 @@
 
 **macOS 26+** · **Apple silicon** · **Swift 6** · **SwiftUI**
 
-- **边听边看**：Qwen3-ASR 在本机生成英文字幕，DeepSeek 逐句翻译正式字幕；支持字幕浮窗。
+- **边听边看**：Qwen3-ASR 在本机生成英文字幕，所选的 AI 服务（DeepSeek、Claude 或 OpenAI）逐句翻译正式字幕；支持字幕浮窗。
 - **关注老师的提问**：筛选面向全班的问题并生成参考答案；识别到老师宣布课间时暂停提问识别，也可手动恢复。
 - **课件与字幕一起用**：打开 PDF 或 PPT，按转写跟随老师讲到的页；选中文字可解释、翻译或提问。
 - **课后整理**：回看录音、字幕和问答，将转写、录音和 AI 总结导出到 Obsidian。
@@ -23,7 +23,7 @@
    make run
    ```
 
-3. 在 App 设置中填入自己的 DeepSeek API key 并保存。首次使用识别时会从 Hugging Face 下载 `mlx-community/Qwen3-ASR-1.7B-8bit`，需要网络；首次录音时按系统提示授予麦克风权限。
+3. 在 App 设置中选择 AI 服务（DeepSeek、Claude 或 OpenAI，默认 DeepSeek），填入自己的 API key 并保存。每家的 key 分开保存。首次使用识别时会从 Hugging Face 下载 `mlx-community/Qwen3-ASR-1.7B-8bit`，需要网络；首次录音时按系统提示授予麦克风权限。
 4. 课前打开 PDF 或 PPT 课件，然后开始录音。PPT 由 PowerPoint 转为 PDF，PowerPoint 不可用时尝试 Keynote；需要安装其中之一，并在系统提示时允许自动化控制。也可以直接打开 PDF。
 5. 课后在历史记录中打开课程回看；需要导出时选择 Obsidian 目标位置并检查待创建的文件。
 
@@ -48,7 +48,7 @@ make test
 
 ## 数据与隐私
 
-音频在本机录制和识别，**不会作为音频上传**。录音、转写和课程记录保存在本机；使用翻译、术语提取、提问识别、答题、AI 跟页或总结时，相关的转写文本、课件文字和提问等上下文会发送给 DeepSeek。使用的是你自己的 API key 和账户，调用会产生 API 费用。key 通过 App 设置保存到 macOS 钥匙串。
+音频在本机录制和识别，**不会作为音频上传**。录音、转写和课程记录保存在本机；使用翻译、术语提取、提问识别、答题、AI 跟页或总结时，相关的转写文本、课件文字和提问等上下文会发送给你在设置里选择的 AI 服务（DeepSeek、Anthropic 或 OpenAI）。使用的是你自己的 API key 和账户，调用会产生 API 费用。key 通过 App 设置保存到 macOS 钥匙串。
 
 课程数据位于 `~/Library/Application Support/ClassLens/sessions/<session-id>/`。导出目录按作者自己的 Obsidian 库约定设计，使用相对结构 `模块/<课程>/资料/课堂记录/ClassLens/{转写,录音,AI总结}/`。导出只新建文件，不覆盖已有文件；同名时会规划其他文件名，实际写入时若目标已存在则报错。
 
@@ -76,11 +76,11 @@ flowchart LR
     H --> L
 ```
 
-`SegmentTranslator`、`QuestionDetector`、`SlideLocator` 和术语提取使用 `deepseek-flash`；`QuestionAnswerer` 和课后总结使用 `deepseek-v4-pro`。`SlideTracker` 提供本机文字比对回退。音频和字幕等由 `SessionStore` 保存，导出时可生成总结。
+`SegmentTranslator`、`QuestionDetector`、`SlideLocator` 和术语提取使用所选服务的快速模型（`deepseek-flash`、`claude-haiku-5-5` 或 `gpt-6-luna`）；`QuestionAnswerer` 和课后总结使用较强的模型（`deepseek-v4-pro`、`claude-opus-5-5` 或 `gpt-6.1-sol`）。各项验收和评估目前只在 DeepSeek 下跑过。`SlideTracker` 提供本机文字比对回退。音频和字幕等由 `SessionStore` 保存，导出时可生成总结。
 
 ## 验证与评估
 
-以下命令在仓库根目录执行；先运行 `make release`。将示例中的环境变量设为你自己的录音和课件路径。回放可能创建本地课程记录；翻译、提问识别和模型跟页会真实调用 DeepSeek 并收费。只测识别时可加 `--asr-only`。
+以下命令在仓库根目录执行；先运行 `make release`。将示例中的环境变量设为你自己的录音和课件路径。回放可能创建本地课程记录；翻译、提问识别和模型跟页会真实调用所选的 AI 服务并收费。只测识别时可加 `--asr-only`。
 
 ```bash
 APP=build/Build/Products/Release/ClassLens.app/Contents/MacOS/ClassLens

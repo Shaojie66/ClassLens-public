@@ -10,7 +10,7 @@
 - 项目由 XcodeGen 从 `project.yml` 生成；**不手改 `.xcodeproj`**，它不进 git，唯一例外是其中的 `Package.resolved`（锁定全部依赖版本，升级依赖后一起提交）
 - 音频：AVAudioEngine；识别：`TranscriptionEngine` 协议；主引擎本地 Qwen3-ASR 1.7B，备用 Parakeet TDT 0.6B v3，均经 mlx-audio-swift 接入（对比依据见 decisions.md）
 - 课件：PDFKit；PPT 导入时经 PowerPoint（兜底 Keynote）转成 PDF，之后只走 PDF 一条路
-- LLM：`LLMClient` 协议 + OpenAI 兼容实现，默认 DeepSeek（Flash：翻译/判问句；Pro：答题）
+- LLM：`LLMClient` 协议，两个实现、三家服务商，在设置里切换：OpenAI 兼容（默认 DeepSeek，Flash：翻译/判问句；Pro：答题）、Anthropic（Claude，Haiku 5.5：翻译/判问句；Opus 5.5：答题）和 OpenAI（走 OpenAI 兼容实现，gpt-6-luna：翻译/判问句；gpt-6.1-sol：答题）。各验收线目前只在 DeepSeek 下跑过
 - 第三方依赖用 SwiftPM，写进 `project.yml`；新增依赖前先说明理由
 
 ## 目录约定

@@ -278,6 +278,28 @@
 - **Colab 用量**：L4，一共消耗 0.51 个算力单位（199.98 → 199.47）。踩过的坑：faster-whisper 需要先手动加载 CUDA 12 的库；pip 升级 huggingface_hub 后要重启 kernel；Canary 需要升级 torchao。
 - **遗留**：这次得不到真 WER。要出真 WER，仍然需要人工校对过的标准答案（用 `sample_windows.py` 抽窗口）。另外，App 回放在用户的 ClassLens 会话记录里留下了一条会话 `C5B019D9…`。
 
+## 2026-11-16 接入 Claude API，与 DeepSeek 并存可切换（用户决定）
+
+- **决定**：新增 Claude 作为第二个 AI 服务商，在设置里切换，DeepSeek 保留且仍是默认。用户原话：「我想用 claude 的 api」「并存可切换」。
+- **理由**：提问识别的提示词和 M3 评估集都是照 DeepSeek 调的，Claude 的结果和延迟都还没测过；并存可以逐项对比，不达标时随时切回。
+- **做法**：
+  - `AnthropicClient` 实现 `LLMClient`，直接用 URLSession 调 `POST https://api.anthropic.com/v1/messages`（`anthropic-version: 2026-10-21`）。Anthropic 没有官方 Swift SDK，不新增依赖。
+  - 模型：答题和课后总结用 `claude-opus-5-5`，翻译、判问句、跟页、术语抽取用 `claude-haiku-5-5`。
+  - 与 OpenAI 格式的差别：`system` 是顶层字段；不发 `temperature`（这两个模型非默认采样参数会报 400）；Opus 5.5 不能关思考，用 `output_config.effort: "low"` 控制延迟；Haiku 5.5 发 `thinking: {type: "disabled"}`；开着思考时 `max_tokens` 要给思考留余量；需要 JSON 时靠提示词，并去掉回复里的代码围栏。
+  - Opus 5.5 的请求带 `fallbacks: "default"`（beta `server-side-fallback-2026-07-01`），安全分类器拒答时由服务端换模型重跑；仍然拒答（`stop_reason: "refusal"`）按错误处理。
+  - 密钥存钥匙串，账户名 `anthropic`；当前选中的服务商存 UserDefaults（`llmProvider`），只存名字。
+  - 错误类型从 `OpenAICompatibleClient.Failure` 提成两家共用的 `LLMFailure`。
+- **还没验证**：Claude 下的 M2 翻译延迟、M3 提问识别评估和答题延迟都没有跑过；在跑过之前，各验收线的结论只对 DeepSeek 成立。
+
+## 2026-11-16 接入 OpenAI 作为第三个服务商（用户决定）
+
+- **决定**：设置里的服务商加上 OpenAI，和 DeepSeek、Claude 并列可切换。用户原话：「把 Claude 、openai接入也合并到公开仓库」。
+- **做法**：沿用 `OpenAICompatibleClient`，地址 `https://api.openai.com/v1/chat/completions`，钥匙串账户 `openai`。
+  - 模型（[模型页](https://developers.openai.com/api/docs/models)，2026-11-16 查）：翻译、判问句、跟页、术语抽取用 `gpt-6-luna`（最便宜，$0.10 / $0.50 每百万 token，`reasoning_effort: none`）；答题和课后总结用 `gpt-6.1-sol`（$2 / $10，最低只能 `low`）。这是按价格和用途选的默认值，没有和 DeepSeek、Claude 对比过效果。
+  - 这两个都是推理模型。Chat Completions 文档写明 `max_tokens` 已弃用、和推理模型不兼容，所以对它们改发 `max_completion_tokens`；开着推理时多给 4096 留给推理。文档说推理模型的参数支持会不同，`temperature` 一律不发，用默认值。
+  - OpenAI 余额不足时也返回 429（错误码 `insufficient_quota`），这种情况按“余额不足”报错，不当成限流去重试。
+- **还没验证**：没有 OpenAI key，没有做过真实调用；各验收线同样没在 OpenAI 下跑过。
+
 ## 进度
 
 - [x] M0 骨架

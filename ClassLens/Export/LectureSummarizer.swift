@@ -29,7 +29,7 @@ struct LectureSummarizer: Sendable {
         )) {
             text += piece
         }
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw OpenAICompatibleClient.Failure.emptyReply }
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw LLMFailure.emptyReply }
         return SummaryNumberCheck.annotate(text, segments: session.segments, slides: slides)
     }
 

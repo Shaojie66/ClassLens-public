@@ -16,7 +16,13 @@ struct SettingsView: View {
         @Bindable var model = model
         Form {
             Section {
-                SecureField("API key", text: $key, prompt: Text(model.hasAPIKey ? "已保存（输入新 key 可替换）" : "sk-…"))
+                Picker("服务商", selection: providerID) {
+                    ForEach(LLMProvider.all, id: \.id) { provider in
+                        Text(provider.name).tag(provider.id)
+                    }
+                }
+                .pickerStyle(.segmented)
+                SecureField("API key", text: $key, prompt: Text(model.hasAPIKey ? "已保存（输入新 key 可替换）" : model.provider.keyPlaceholder))
                 HStack {
                     Button("保存") { save() }
                         .disabled(key.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -37,7 +43,7 @@ struct SettingsView: View {
             } header: {
                 Text("AI 服务：\(model.provider.name)")
             } footer: {
-                Text("key 只保存在本机钥匙串里。翻译用 \(model.provider.fastModel)（关闭思考模式），费用记在你自己的 \(model.provider.name) 账户上。")
+                Text("每家服务商的 key 分开保存在本机钥匙串里。翻译用 \(model.provider.fastModel)（\(model.provider.fastModelNote)），费用记在你自己的 \(model.provider.name) 账户上。切换后对下一次录音生效，正在录的这节课不变。")
                     .foregroundStyle(.secondary)
             }
             Section("翻译") {
@@ -63,6 +69,20 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 520)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// The picker works on provider ids; switching clears the key field and the last test result,
+    /// which belonged to the other provider.
+    private var providerID: Binding<String> {
+        Binding(
+            get: { model.provider.id },
+            set: { id in
+                guard let provider = LLMProvider.named(id), provider.id != model.provider.id else { return }
+                model.provider = provider
+                key = ""
+                status = nil
+            }
+        )
     }
 
     private func save() {
