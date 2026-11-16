@@ -1,0 +1,70 @@
+name: ClassLens
+options:
+  bundleIdPrefix: com.chenshaojie
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+packages:
+  # 0.1.5+ needs mlx-swift >= 0.32.3 (via mlx-swift-lm), and mlx-swift >= 0.31.5 needs Swift 6.3 (Xcode 26.3 ships 6.2.4).
+  MLXAudio:
+    url: https://github.com/Blaizzy/mlx-audio-swift
+    exactVersion: 0.1.4
+  MLXSwift:
+    url: https://github.com/ml-explore/mlx-swift
+    exactVersion: 0.31.4
+  SwiftHuggingFace:
+    url: https://github.com/huggingface/swift-huggingface
+    from: 0.8.1
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ARCHS: arm64
+    DEVELOPMENT_TEAM: M9SMPTK6FN
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "Apple Development"
+    ENABLE_HARDENED_RUNTIME: YES
+targets:
+  ClassLens:
+    type: application
+    platform: macOS
+    sources:
+      - path: ClassLens
+    dependencies:
+      - package: MLXAudio
+        product: MLXAudioSTT
+      - package: MLXAudio
+        product: MLXAudioCore
+      - package: MLXSwift
+        product: MLX
+      - package: SwiftHuggingFace
+        product: HuggingFace
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.chenshaojie.ClassLens
+        INFOPLIST_FILE: ClassLens/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ClassLens/Resources/ClassLens.entitlements
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+  ClassLensTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: ClassLensTests
+    dependencies:
+      - target: ClassLens
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.chenshaojie.ClassLensTests
+        GENERATE_INFOPLIST_FILE: YES
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/ClassLens.app/Contents/MacOS/ClassLens"
+schemes:
+  ClassLens:
+    build:
+      targets:
+        ClassLens: all
+        ClassLensTests: [test]
+    test:
+      targets:
+        - ClassLensTests
